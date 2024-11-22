@@ -32,7 +32,7 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire); // Pass our oneWire reference to Dallas Temperature. 
 int num_temp_sensors_found; // Number of temperature devices found
 //Index mapping for temperatue readings: [0]->water inlet, [1]->B1/2_Hi, [2]->B1/2_Lo, [3]->B3/4_Hi, [4]->B3/4_Lo
-float temperatures_C[NUM_TEMP_SENSORS_EXPECTED] = {-100.0};
+float temperatures_C[NUM_TEMP_SENSORS_EXPECTED] = {-100.0,-100.0,-100.0,-100.0,-100.0};
 
 typedef enum
 {
@@ -135,8 +135,12 @@ void read_temperatures()
   }
 }
 
-void setup_sensors()
+void setup_sensors(bool reset_error)
 {
+  if (reset_error)
+  {
+    last_error_code = NO_ERROR;
+  }
   sensors.begin();
   num_temp_sensors_found = sensors.getDeviceCount();  // Grab a count of devices on the wire
   if (num_temp_sensors_found != NUM_TEMP_SENSORS_EXPECTED)
@@ -187,7 +191,7 @@ void error_recovery_routine()
     case GHOST_SENSORS:
       display_message("Recovery routine for error number: %d",last_error_code);
       delay(1500);
-      setup_sensors();
+      setup_sensors(true);
       break;
     default:
       display_message("Unkown recovery routine for error: %d", last_error_code);
@@ -204,7 +208,7 @@ void setup_lcd(void) {
 void setup(void) {
   setup_lcd();
   Serial.begin(9600);
-  setup_sensors();
+  setup_sensors(false);
 }
 
 /////////////////// DISPLAY MONITOR HANDLING ////////////////////////
