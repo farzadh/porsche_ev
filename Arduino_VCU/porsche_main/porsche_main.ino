@@ -49,10 +49,12 @@ void loop()
   if (sensor_read_timer.check())
   {
     read_temperatures();
+    sensor_read_timer.reset();
   }
   if(!error_showing && display_timer.check())
   {
     update_display();
+    display_timer.reset();
   }
   /*if(last_error_code && !error_showing && error_display_timer.check())
   {
@@ -61,14 +63,17 @@ void loop()
   if (error_display_duration.check())
   {
     error_showing = false;
+    error_display_duration.reset();
   }
   if (last_error_code && error_recovery_timer.check())
   {
     error_recovery_routine();
+    error_recovery_timer.reset();
   }
   if (serial_port_timer.check())
   {
     Serial.print("Still alive ... \n");
+    serial_port_timer.reset();
   }
 }
 
