@@ -1,0 +1,94 @@
+VERSION ""
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIGTYPE_VALTYPE_
+    SIGTYPETYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_ :
+
+BU_:
+
+BO_ 402772111 1801D08F: 8 Vector__XXX
+ SG_ DC_DC_voltage : 0|16@1+ (0.1,0) [0|6553.5] "V" Vector__XXX
+ SG_ DC_DC_current : 16|16@1+ (0.1,0) [0|6553.5] "A" Vector__XXX
+ SG_ DCDC_ready : 32|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_status : 33|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_hard_fault : 34|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_error_can : 35|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_fan_or_water : 36|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_stop_error : 37|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_fan_and_water : 38|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_HVIL_ERROR : 39|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_warm_temp : 40|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_over_temp : 41|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_over_volt_input : 42|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_low_volt_input : 43|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_over_volt_output : 44|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_low_volt_output : 45|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_over_cur_output : 46|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ DCDC_temperature : 56|8@1+ (0.1,0) [0|25.5] "°C" Vector__XXX
+
+CM_ BO_ 402772111 "CAN message for ID 0x1801D08F with DC-DC voltage, current, temperature, and fault signals.";
+CM_ SG_ 402772111 DC_DC_voltage "DCDC output voltage with a resolution of 0.1 Volts/bit.";
+CM_ SG_ 402772111 DC_DC_current "DCDC output current with a resolution of 0.1 Amps/bit.";
+CM_ SG_ 402772111 DCDC_ready "DCDC readiness signal: 0 = uncompleted, 1 = completed.";
+CM_ SG_ 402772111 DCDC_status "DCDC status signal: 0 = stop, 1 = work.";
+CM_ SG_ 402772111 DCDC_hard_fault "DCDC hard fault: 0 = No Error, 1 = Error.";
+CM_ SG_ 402772111 DCDC_error_can "DCDC CAN communication error: 0 = No Error, 1 = Error.";
+CM_ SG_ 402772111 DCDC_fan_or_water "DCDC fan or water status: 0 = Off, 1 = On.";
+CM_ SG_ 402772111 DCDC_stop_error "DCDC stop error: 0 = No Error, 1 = Error.";
+CM_ SG_ 402772111 DCDC_fan_and_water "DCDC fan and water status: 0 = FAN OFF, 1 = FAN ON.";
+CM_ SG_ 402772111 DCDC_HVIL_ERROR "DCDC HVIL error: 0 = Lock Accomplish, 1 = Non Lock.";
+CM_ SG_ 402772111 DCDC_warm_temp "DCDC warm temperature status: 0 = No Warm, 1 = Warm.";
+CM_ SG_ 402772111 DCDC_over_temp "DCDC over temperature error: 0 = No Error, 1 = Error.";
+CM_ SG_ 402772111 DCDC_over_volt_input "DCDC over voltage input error: 0 = No Error, 1 = Error.";
+CM_ SG_ 402772111 DCDC_low_volt_input "DCDC low voltage input error: 0 = No Error, 1 = Error.";
+CM_ SG_ 402772111 DCDC_over_volt_output "DCDC over voltage output error: 0 = No Error, 1 = Error.";
+CM_ SG_ 402772111 DCDC_low_volt_output "DCDC low voltage output error: 0 = No Error, 1 = Error.";
+CM_ SG_ 402772111 DCDC_over_cur_output "DCDC over current output error: 0 = No Error, 1 = Error.";
+CM_ SG_ 402772111 DCDC_temperature "DCDC temperature with a resolution of 0.1 degrees/bit.";
+
+VAL_ 402772111 DCDC_ready 0 "uncompleted" 1 "completed";
+VAL_ 402772111 DCDC_status 0 "stop" 1 "work";
+VAL_ 402772111 DCDC_hard_fault 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_error_can 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_fan_or_water 0 "Off" 1 "On";
+VAL_ 402772111 DCDC_stop_error 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_fan_and_water 0 "FAN OFF" 1 "FAN ON";
+VAL_ 402772111 DCDC_HVIL_ERROR 0 "Lock Accomplish" 1 "Non Lock";
+VAL_ 402772111 DCDC_warm_temp 0 "No Warm" 1 "Warm";
+VAL_ 402772111 DCDC_over_temp 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_over_volt_input 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_low_volt_input 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_over_volt_output 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_low_volt_output 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_over_cur_output 0 "No Error" 1 "Error";
+
+BA_DEF_ "GenMsgCycleTime" INT 0 10000;
+BA_ "GenMsgCycleTime" BO_ 402772111 100;
+
+
+
