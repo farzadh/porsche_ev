@@ -53,9 +53,9 @@ BO_ 402772111 1801D08F_DCDC_status: 8 Vector__XXX
    SG_ DCDC_over_cur_output : 46|1@1+ (1,0) [0|1] "" Vector__XXX
    SG_ DCDC_temperature : 56|8@1+ (0.1,0) [0|25.5] "°C" Vector__XXX
 
-BO_ 419385573 18FF50E5_Charger_status: 8 OBC
-   SG_ HVDC_output_voltage : 0|16@1+ (0.1,0) [0|6553.5] "V" Vector__XXX
-   SG_ HVDC_output_current : 16|16@1+ (0.1,0) [0|6553.5] "A" Vector__XXX
+BO_ 419385573 18FF50E5_Charger_status: 8 Vector__XXX
+   SG_ HVDC_output_voltage : 7|16@0+ (0.1,0) [0|6553.5] "V" Vector__XXX
+   SG_ HVDC_output_current : 23|16@0+ (0.1,0) [0|6553.5] "A" Vector__XXX
    SG_ HW_protection : 32|1@1+ (1,0) [0|1] "" Vector__XXX
    SG_ Temperature_protection : 33|1@1+ (1,0) [0|1] "" Vector__XXX
    SG_ Input_voltage_status : 34|2@1+ (1,0) [0|3] "" Vector__XXX
@@ -75,22 +75,22 @@ BO_ 419385573 18FF50E5_Charger_status: 8 OBC
    SG_ S2_SW_ctrl_bit_status : 55|1@1+ (1,0) [0|1] "" Vector__XXX
    SG_ Temperature : 56|8@1+ (1,-40) [-40|215] "°C" Vector__XXX
 
-BO_ 403105268 1806E5F4_Charger_ctrl: 8 BMS
- SG_ HVDC_Max_charge_voltage : 0|16@1+ (0.1,0) [0|6553.5] "V" Vector__XXX
- SG_ HVDC_Max_charge_current : 16|16@1+ (0.1,0) [0|6553.5] "A" Vector__XXX
- SG_ Control_work_enablement : 32|8@1+ (1,0) [0|255] "" Vector__XXX
- SG_ Controlled_operating_mode : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+BO_ 403105268 1806E5F4_Charger_ctrl: 8 Vector__XXX
+   SG_ HVDC_Max_charge_voltage : 7|16@0+ (0.1,0) [0|6553.5] "V" Vector__XXX
+   SG_ HVDC_Max_charge_current : 23|16@0+ (0.1,0) [0|6553.5] "A" Vector__XXX
+   SG_ Control_work_enablement : 32|8@1+ (1,0) [0|255] "" Vector__XXX
+   SG_ Controlled_operating_mode : 40|8@1+ (1,0) [0|255] "" Vector__XXX
 
- 
 BA_DEF_ "GenMsgCycleTime" INT 0 10000;
 BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
 BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
+BA_DEF_ BO_ "labelfilters" INT 0 0;
 BA_DEF_ BO_ "labelfilters" INT 0 0;
 BA_ "GenMsgCycleTime" BO_ 402772111 100;
 BA_DEF_DEF_ "GenMsgBackgroundColor" "#ffffff";
 BA_DEF_DEF_ "GenMsgForegroundColor" "#000000";
 BA_DEF_DEF_ "labelfilters" 1;
-
+BA_DEF_DEF_ "labelfilters" 1;
 CM_ BO_ 402772111 "CAN message for ID 0x1801D08F with DC-DC voltage, current, temperature, and fault signals.";
 CM_ SG_ 402772111 DC_DC_voltage "DCDC output voltage with a resolution of 0.1 Volts/bit.";
 CM_ SG_ 402772111 DC_DC_current "DCDC output current with a resolution of 0.1 Amps/bit.";
@@ -110,22 +110,6 @@ CM_ SG_ 402772111 DCDC_over_volt_output "DCDC over voltage output error: 0 = No 
 CM_ SG_ 402772111 DCDC_low_volt_output "DCDC low voltage output error: 0 = No Error, 1 = Error.";
 CM_ SG_ 402772111 DCDC_over_cur_output "DCDC over current output error: 0 = No Error, 1 = Error.";
 CM_ SG_ 402772111 DCDC_temperature "DCDC temperature with a resolution of 0.1 degrees/bit.";
-VAL_ 402772111 DCDC_ready 0 "uncompleted" 1 "completed";
-VAL_ 402772111 DCDC_status 0 "stop" 1 "work";
-VAL_ 402772111 DCDC_hard_fault 0 "No Error" 1 "Error";
-VAL_ 402772111 DCDC_error_can 0 "No Error" 1 "Error";
-VAL_ 402772111 DCDC_fan_or_water 0 "Off" 1 "On";
-VAL_ 402772111 DCDC_stop_error 0 "No Error" 1 "Error";
-VAL_ 402772111 DCDC_fan_and_water 0 "FAN OFF" 1 "FAN ON";
-VAL_ 402772111 DCDC_HVIL_ERROR 0 "Lock Accomplish" 1 "Non Lock";
-VAL_ 402772111 DCDC_warm_temp 0 "No Warm" 1 "Warm";
-VAL_ 402772111 DCDC_over_temp 0 "No Error" 1 "Error";
-VAL_ 402772111 DCDC_over_volt_input 0 "No Error" 1 "Error";
-VAL_ 402772111 DCDC_low_volt_input 0 "No Error" 1 "Error";
-VAL_ 402772111 DCDC_over_volt_output 0 "No Error" 1 "Error";
-VAL_ 402772111 DCDC_low_volt_output 0 "No Error" 1 "Error";
-VAL_ 402772111 DCDC_over_cur_output 0 "No Error" 1 "Error";
-
 CM_ BO_ 419385573 "CAN message for ID 0x18FF50E5 with HVDC voltage, current, and fault signals.";
 CM_ SG_ 419385573 HVDC_output_voltage "HVDC output voltage with a resolution of 0.1 Volts/bit.";
 CM_ SG_ 419385573 HVDC_output_current "HVDC output current with a resolution of 0.1 Amps/bit.";
@@ -147,6 +131,26 @@ CM_ SG_ 419385573 charge_socket_over_heat "Charge socket overheat status: 0 = No
 CM_ SG_ 419385573 Electronic_lock_state "Electronic lock state: 0 = In judgement, 1 = Locked, 2 = Unlocked, 3 = Unlock fault, 4 = Locked fault.";
 CM_ SG_ 419385573 S2_SW_ctrl_bit_status "S2 switch control bit status: 0 = switch off, 1 = close up.";
 CM_ SG_ 419385573 Temperature "HVDC temperature with resolution of 1 degree Celsius and an offset of -40.";
+CM_ BO_ 403105268 "HVDC message containing maximum charge voltage, current values, and control work enablement.";
+CM_ SG_ 403105268 HVDC_Max_charge_voltage "Maximum allowable HVDC charge voltage with a resolution of 0.1 V/bit.";
+CM_ SG_ 403105268 HVDC_Max_charge_current "Maximum allowable HVDC charge current with a resolution of 0.1 A/bit.";
+CM_ SG_ 403105268 Control_work_enablement "Control work enablement: 0 = Charger is starting to charge, 1 = Charger close the output, 2 = Charge end/sleep, others = In vain.";
+CM_ SG_ 403105268 Controlled_operating_mode "Controlled operating mode: 0 = Charging mode, 1 = Heating mode, others = In vain.";
+VAL_ 402772111 DCDC_ready 0 "uncompleted" 1 "completed";
+VAL_ 402772111 DCDC_status 0 "stop" 1 "work";
+VAL_ 402772111 DCDC_hard_fault 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_error_can 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_fan_or_water 0 "Off" 1 "On";
+VAL_ 402772111 DCDC_stop_error 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_fan_and_water 0 "FAN OFF" 1 "FAN ON";
+VAL_ 402772111 DCDC_HVIL_ERROR 0 "Lock Accomplish" 1 "Non Lock";
+VAL_ 402772111 DCDC_warm_temp 0 "No Warm" 1 "Warm";
+VAL_ 402772111 DCDC_over_temp 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_over_volt_input 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_low_volt_input 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_over_volt_output 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_low_volt_output 0 "No Error" 1 "Error";
+VAL_ 402772111 DCDC_over_cur_output 0 "No Error" 1 "Error";
 VAL_ 419385573 HW_protection 0 "Normal" 1 "HW protection";
 VAL_ 419385573 Temperature_protection 0 "Normal" 1 "Internal temp protection";
 VAL_ 419385573 Input_voltage_status 0 "Normal" 1 "Input under voltage" 2 "Input over voltage" 3 "No input voltage";
@@ -164,11 +168,5 @@ VAL_ 419385573 CP_signal_status 0 "No CP signal" 1 "CP signal is normal";
 VAL_ 419385573 charge_socket_over_heat 0 "Normal" 1 "Over temperature protection";
 VAL_ 419385573 Electronic_lock_state 0 "In judgement" 1 "Locked" 2 "Unlocked" 3 "Unlock fault" 4 "Locked fault";
 VAL_ 419385573 S2_SW_ctrl_bit_status 0 "switch off" 1 "close up";
-
-CM_ BO_ 403105268 "HVDC message containing maximum charge voltage, current values, and control work enablement.";
-CM_ SG_ 403105268 HVDC_Max_charge_voltage "Maximum allowable HVDC charge voltage with a resolution of 0.1 V/bit.";
-CM_ SG_ 403105268 HVDC_Max_charge_current "Maximum allowable HVDC charge current with a resolution of 0.1 A/bit.";
-CM_ SG_ 403105268 Control_work_enablement "Control work enablement: 0 = Charger is starting to charge, 1 = Charger close the output, 2 = Charge end/sleep, others = In vain.";
-CM_ SG_ 403105268 Controlled_operating_mode "Controlled operating mode: 0 = Charging mode, 1 = Heating mode, others = In vain.";
-VAL_ 403105268 Control_work_enablement 0 "Charger is starting to charge" 1 "Charger close the output" 2 "Charge end/sleep" 3-255 "In vain";
-VAL_ 403105268 Controlled_operating_mode 0 "Charging mode" 1 "Heating mode" 2-255 "In vain";
+VAL_ 403105268 Control_work_enablement 0 "Charger is starting to charge" 1 "Charger close the output" 2 "Charge end/sleep" 255 "In vain";
+VAL_ 403105268 Controlled_operating_mode 0 "Charging mode" 1 "Heating mode" 255 "In vain";

@@ -5,18 +5,20 @@
  1- Read temperature sensors for all regions, and report back.
  2- Support display (4*20) for reporting results
 */
+#include <due_can.h>
+
 // Libraries related to display
 #include <LiquidCrystal_I2C.h> //install liquid crystal I2C library by Marco Schwarz
 #include <Metro.h> // for timers
 
 Metro sensor_read_timer = Metro(5000); //Read temperature sensors this often
 Metro display_timer = Metro(500); //write to display (home page) at this interval
-Metro error_display_timer = Metro(9000); //write error message if any at this interval
+Metro error_display_timer = Metro(60000); //write error message if any at this interval
 Metro error_display_duration = Metro(2000); //keep error message on display this long
-Metro error_recovery_timer = Metro(15000); //Try to recover from a fault
+Metro error_recovery_timer = Metro(90000); //Try to recover from a fault
 bool error_showing = false; //indicates that an error message is being displayed at the moment
 
-Metro serial_port_timer = Metro(2000);
+Metro serial_port_timer = Metro(10000); //timer for printing alive messages
 //Initialize the liquid crystal library
 #define NUM_LCD_ROWS 4
 #define NUM_LCD_COLUMNS 20
@@ -34,18 +36,102 @@ int num_temp_sensors_found; // Number of temperature devices found
 //Index mapping for temperatue readings: [0]->water inlet, [1]->B1/2_Hi, [2]->B1/2_Lo, [3]->B3/4_Hi, [4]->B3/4_Lo
 float temperatures_C[NUM_TEMP_SENSORS_EXPECTED] = {-100.0,-100.0,-100.0,-100.0,-100.0};
 
+//class CAN_FRAME
+//    BytesUnion data;    // 64 bits - lots of ways to access it.
+//    uint32_t id;        // 29 bit if ide set, 11 bit otherwise
+//    uint32_t fid;       // family ID - used internally to library
+//    uint32_t timestamp; // CAN timer value when mailbox message was received.
+//    uint8_t rtr;        // Remote Transmission Request (1 = RTR, 0 = data frame)
+//    uint8_t priority;   // Priority but only important for TX frames and then only for special uses (0-31)
+//    uint8_t extended;   // Extended ID flag
+//    uint8_t length;     // Number of data bytes
+CAN_FRAME outFrame; //A structured variable according to due_can library for transmitting CAN data.
+CAN_FRAME inFrame;  //structure to keep inbound inFrames
+
+// Charger related parameters
+const uint16_t HV_MAX_CHG_VOLTAGE = 403; //HV battery is charged up to this voltage (= 96 * 4.2, rounded down)
+const uint16_t HV_MAX_CHG_CURRENT = 10; //Set for 3.3 KW TC Elcon Charger
+Metro charger_timer = Metro(400);
+struct charger_status_report
+{
+  float HV_Voltage = 0; //Current voltage of HV battery (bytes 0/1)
+  float HV_Current = 0; //Charge current of HV battery (bytes 2/3)
+  union
+  {
+    uint8_t byte4_value = 0;
+    struct{
+      uint8_t HW_protection : 1; //0:Normal, 1:Fault
+      uint8_t Temp_protection : 1; //0:Normal, 1:Fault
+      uint8_t input_volt_status : 2; //0: Normal, 1: under voltage, 2: over-voltage, 3: no voltage
+      uint8_t output_under_voltage : 1; //0:Normal, 1:Fault
+      uint8_t output_over_voltage  : 1; //0:Normal, 1:Fault
+      uint8_t output_over_current  : 1; //0:Normal, 1:Fault
+      uint8_t output_short_circuit : 1; //0:Normal, 1:Fault      
+    } protection;
+  };
+  union
+  {
+    uint8_t byte5_value = 0;
+    struct{
+      uint8_t comm_status : 1; //0:Normal, 1:Receiver Timeout
+      uint8_t working_status : 2; //0:Undefined, 1:Work, 2: Stop, 3: Stop/Standby
+      uint8_t init_completion : 1; //0: not complete, 1: completed
+      uint8_t fan_enable: 1; //0: close, 1: open
+      uint8_t pump_fan_enable: 1; //0: close, 1: open
+      uint8_t unused : 2;
+    } work_status;
+  };
+  union
+  {
+    uint8_t byte6_value = 0;
+    struct{
+      uint8_t CC_signal : 2; //0:Not connected, 1:half connected, 2: Normal connected, 3: Resistance detection error
+      uint8_t CP_signal : 1; //0: No CP signal, 1: CP signal normal
+      uint8_t socket_overheat : 1; //0: Normal, 1: Charge socket overheat protection
+      uint8_t electronic_lock: 3; //0: in judgement, 1: Locked, 2:unlocked, 3:unlock fault, 4: lock fault
+      uint8_t S2_sw_ctrl: 1; //0: switch off, 1: close up
+    } electronic_status;
+  };
+  int temperature_C = -100;
+  bool OK_to_charge = false; //indicates if all is good to enable charging
+  bool NMI = false; //New message indicator
+  unsigned long last_update = 0;
+} charger_status;
+
+typedef enum
+{
+  IGNITION_OFF = 0, //ignition switch is off
+  IGNITION_ON,      //ignition switch is on
+  START_TRIGGERRED, //ignition switch is on, start switch is trigggerred (ready to move)
+  CHARGER_PLUGGED,    //charger is plugged in
+} run_status_t;
+run_status_t vehicle_status = IGNITION_OFF;
+
 typedef enum
 {
   NO_ERROR = 0,
   MISSING_SENSORS,
   BOGUS_SENSORS,
-  GHOST_SENSORS
+  GHOST_SENSORS,
+  CHARGER_ERROR
 } error_t;
 error_t last_error_code = NO_ERROR;
 
+struct relays
+{
+  bool water_pump = false;
+  bool radiator_fan = false;
+} control_relays;
 
 void loop()
 {
+  handle_CAN();
+
+  if ((vehicle_status == CHARGER_PLUGGED) && charger_timer.check() && charger_status.OK_to_charge)
+  {
+    send_charger_msg();
+  }
+  
   if (sensor_read_timer.check())
   {
     read_temperatures();
@@ -75,6 +161,120 @@ void loop()
     Serial.print("Still alive ... \n");
     serial_port_timer.reset();
   }
+
+  update_vehicle_status();
+}
+
+void update_vehicle_status()
+{
+  unsigned long now = millis();
+  if (vehicle_status == CHARGER_PLUGGED)
+  { //check if charger is still plugged in
+    if(now - charger_status.last_update > 2000)
+    {
+      vehicle_status = IGNITION_OFF; //FIXME
+    }
+  }
+}
+
+/////////////////// HANDLE CAN and related modules////////////////////////
+void handle_CAN()
+{
+  if(Can0.available())
+  {
+    Can0.read(inFrame);
+    if(inFrame.id == 0x18FF50E5)//Charger status report
+    {
+      charger_status.HV_Voltage = (float)(inFrame.data.bytes[0] * 256 + inFrame.data.bytes[1]) * 0.1;
+      charger_status.HV_Current = (float)(inFrame.data.bytes[2] * 256 + inFrame.data.bytes[3]) * 0.1;
+      charger_status.temperature_C = (int)inFrame.data.bytes[7] - 40;
+      charger_status.byte4_value = inFrame.data.bytes[4];
+      charger_status.byte5_value = inFrame.data.bytes[5];
+      charger_status.byte6_value = inFrame.data.bytes[6];
+      eval_charger_status();
+      vehicle_status = CHARGER_PLUGGED;
+      charger_status.NMI = true;
+      charger_status.last_update = millis(); //now
+      serial_printf("Charger: %.2f V, %.2f A\n", charger_status.HV_Voltage, charger_status.HV_Current);
+      charger_timer.reset();
+    }
+    else
+    {
+      serial_printf("Unknown CAN0 message with ID %8x is received\n", inFrame.id);
+    }
+  }
+}
+
+
+void eval_charger_status()
+{
+  charger_status.OK_to_charge = false;
+  if (charger_status.byte4_value != 0)
+  {
+    Serial.print("Charger fault detected: \n");
+    if(charger_status.protection.HW_protection)
+      Serial.print("   HW protection is enabled.\n");
+      
+    if(charger_status.protection.Temp_protection )
+      Serial.print("   Temperature protection is enabled.\n");
+      
+    if(charger_status.protection.input_volt_status == 1)
+      Serial.print("   Input under-voltage detected.\n");
+    else if(charger_status.protection.input_volt_status == 2)
+      Serial.print("   Input over-voltage detected.\n");
+    else if(charger_status.protection.input_volt_status == 3)
+      Serial.print("   No input voltage detected.\n");
+      
+    if(charger_status.protection.output_under_voltage)
+      Serial.print("   Output under voltage is detected.\n");
+      
+    if(charger_status.protection.output_over_voltage)
+      Serial.print("   Output over voltage is detected.\n");
+      
+    if(charger_status.protection.output_over_current)
+      Serial.print("   Output over current is detected.\n");
+      
+    if(charger_status.protection.output_short_circuit)
+      Serial.print("   Output short-circuit is detected.\n");
+  }
+  else
+  {
+    charger_status.OK_to_charge = true; //FIXME: This needs to be checked against BMS status, temperature sensors, etc.
+  }
+
+  // Work status
+  if(charger_status.work_status.comm_status)
+    Serial.print("Charger receiver time-out.\n");
+  
+  if(charger_status.work_status.working_status == 0)
+    Serial.print("Charger work status is undefined.\n");
+  else if(charger_status.work_status.working_status == 2)
+    Serial.print("Charger is stopped.\n");
+  else if(charger_status.work_status.working_status == 3)
+    Serial.print("Charger is standby/stopped.\n");
+
+  if(charger_status.work_status.init_completion == 0)
+    Serial.print("Charger initializations is not completed.\n");
+}
+
+void send_charger_msg()
+{
+  Serial.print("Sending CAN signal ... \n");
+  outFrame.id = 0x1806E5F4;
+  outFrame.length = 8;
+  outFrame.extended = 1;
+  outFrame.rtr=1;
+  outFrame.data.bytes[0] = ((HV_MAX_CHG_VOLTAGE) * 10) >> 8;   //high byte of voltage set point
+  outFrame.data.bytes[1] = ((HV_MAX_CHG_VOLTAGE) * 10) & 0xFF; //low byte of voltage set point
+  outFrame.data.bytes[2] = (HV_MAX_CHG_CURRENT * 10) >> 8;   //high byte of current set point
+  outFrame.data.bytes[3] = (HV_MAX_CHG_CURRENT * 10) & 0xFF;   //low byte of current set point
+  outFrame.data.bytes[4] = 0x00;
+  outFrame.data.bytes[5] = 0x00;
+  outFrame.data.bytes[6] = 0x00;
+  outFrame.data.bytes[7] = 0x00;
+  Can0.sendFrame(outFrame); //send to pcs IPC can 
+  charger_status.NMI = false;
+  charger_timer.reset();
 }
 
 /////////////////// HANDLE SENSORS ////////////////////
@@ -214,6 +414,9 @@ void setup(void) {
   setup_lcd();
   Serial.begin(9600);
   setup_sensors(false);
+
+  Can0.begin(CAN_BPS_250K);
+  Can0.watchFor();
 }
 
 /////////////////// DISPLAY MONITOR HANDLING ////////////////////////
@@ -221,10 +424,21 @@ typedef enum
 {
   PAGE_HOME = 0,
   PAGE_ERROR,
-  PAGE_INFO
+  PAGE_INFO,
+  PAGE_CHARGER
 } display_page_t;
 // keeps track last page shown on display
 display_page_t lcd_page_index = PAGE_HOME;
+
+void serial_printf(const char* format, ...)
+{
+  char str_buffer[100]; //buffer for printf statements
+  va_list args;
+  va_start(args, format);
+  vsnprintf(str_buffer, sizeof(str_buffer), format, args);
+  va_end(args);
+  Serial.print(str_buffer);
+}
 
 /* Display formatted messages to the LCD display and also handle text wrapping */
 void display_message(const char* message, ...)
@@ -269,6 +483,7 @@ void display_error()
   {
     case NO_ERROR:
       lcd.print("No error found!");
+      serial_printf("No error found!");
     break;
     case MISSING_SENSORS:
       lcd.print("Missing sensors!");
@@ -278,6 +493,7 @@ void display_error()
       lcd.setCursor(0, 2);
       lcd.print("Found: ");
       lcd.print(num_temp_sensors_found);
+      serial_printf("Missing sensors, Expected (%d), Found (%d)\n", NUM_TEMP_SENSORS_EXPECTED, num_temp_sensors_found);
     break;
     case BOGUS_SENSORS:
       lcd.print("Bogus sensors!");
@@ -287,9 +503,11 @@ void display_error()
       lcd.setCursor(0, 2);
       lcd.print("Found: ");
       lcd.print(num_temp_sensors_found);
+      serial_printf("Bogus sensors, Expected (%d), Found(%d)\n", NUM_TEMP_SENSORS_EXPECTED, num_temp_sensors_found);
     break;
     default:
       lcd.print("Unknown error");
+      serial_printf("Unknown error");
     break;
   }
   lcd_page_index = PAGE_ERROR;
@@ -299,14 +517,79 @@ void display_error()
 
 void update_display()
 {
+  char line_buffer[30];
   static bool display_flag = 0;
   display_flag = !display_flag;
+  if (vehicle_status != CHARGER_PLUGGED)
+  {
+    display_home_page();
+    // Status line
+    lcd.setCursor(0, 3);
+    lcd.print("STATUS: ");
+    if (!last_error_code)
+    {
+      lcd.print("OK          ");
+    }
+    else
+    {
+      sprintf(line_buffer, "ERROR(%d)", last_error_code);
+      lcd.print(line_buffer);
+    }
+  }
+  else 
+  {
+    display_charger_page();
+  }
+  //blinking star
+  lcd.setCursor(19, 0);
+  lcd.print(display_flag ? "*": " ");
+}
+
+void display_charger_page()
+{
+  if (lcd_page_index != PAGE_CHARGER)
+  {
+    lcd.clear();
+  }
+  lcd_page_index = PAGE_CHARGER;
+  char line_buffer[30];
+  uint8_t row = 0, col = 0;
+  lcd.setCursor(col, row);
+  lcd.print("Charger plugged:");
+  sprintf(line_buffer, "Vout: %.2f Volt", charger_status.HV_Voltage);
+  row = 1; lcd.setCursor(col, row);
+  lcd.print(line_buffer);
+  sprintf(line_buffer, "Iout: %.2f Amp", charger_status.HV_Current);
+  row = 2; lcd.setCursor(col, row);
+  lcd.print(line_buffer);
+  //Status line
+  row = 3; lcd.setCursor(col, row);
+  switch (charger_status.work_status.working_status){
+    case 0:
+      sprintf(line_buffer, "Status: Undefined");
+      break;
+    case 1:
+      sprintf(line_buffer, "Status: Working");
+      break;
+    case 2:
+      sprintf(line_buffer, "Status: Stopped");
+      break;
+    case 3:
+      sprintf(line_buffer, "Status: Standby");
+      break;
+    default:
+      sprintf(line_buffer, "Status: ???");
+  }
+  lcd.print(line_buffer);
+}
+
+void display_home_page()
+{
   if (lcd_page_index != PAGE_HOME)
   {
     lcd.clear();
   }
   lcd_page_index = PAGE_HOME;
-  
   char line_buffer[30];
   // [0] Water Inlet  --> 0x13C05
   // [1] Bank1/2_High --> 0x13C7C
@@ -352,22 +635,5 @@ void update_display()
     }
     lcd.setCursor(col, row);
     lcd.print(line_buffer);
-  }
-  
-  //blinking star
-  lcd.setCursor(19, 0);
-  lcd.print(display_flag ? "*": " ");
-  
-  // Status line
-  lcd.setCursor(0, 3);
-  lcd.print("STATUS: ");
-  if (!last_error_code)
-  {
-    lcd.print("OK          ");
-  }
-  else
-  {
-    sprintf(line_buffer, "ERROR(%d)", last_error_code);
-    lcd.print(line_buffer);
-  }
+  }  
 }
