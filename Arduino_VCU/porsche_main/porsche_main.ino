@@ -13,6 +13,7 @@
 
 Metro sensor_read_timer = Metro(5000); //Read temperature sensors this often
 Metro display_timer = Metro(500); //write to display (home page) at this interval
+Metro page_switch_timer = Metro(2000); //page switch timer (for home page)
 Metro error_display_timer = Metro(60000); //write error message if any at this interval
 Metro error_display_duration = Metro(2000); //keep error message on display this long
 Metro error_recovery_timer = Metro(90000); //Try to recover from a fault
@@ -36,15 +37,6 @@ int num_temp_sensors_found; // Number of temperature devices found
 //Index mapping for temperatue readings: [0]->water inlet, [1]->B1/2_Hi, [2]->B1/2_Lo, [3]->B3/4_Hi, [4]->B3/4_Lo
 float temperatures_C[NUM_TEMP_SENSORS_EXPECTED] = {-100.0,-100.0,-100.0,-100.0,-100.0};
 
-//class CAN_FRAME
-//    BytesUnion data;    // 64 bits - lots of ways to access it.
-//    uint32_t id;        // 29 bit if ide set, 11 bit otherwise
-//    uint32_t fid;       // family ID - used internally to library
-//    uint32_t timestamp; // CAN timer value when mailbox message was received.
-//    uint8_t rtr;        // Remote Transmission Request (1 = RTR, 0 = data frame)
-//    uint8_t priority;   // Priority but only important for TX frames and then only for special uses (0-31)
-//    uint8_t extended;   // Extended ID flag
-//    uint8_t length;     // Number of data bytes
 CAN_FRAME outFrame; //A structured variable according to due_can library for transmitting CAN data.
 CAN_FRAME inFrame;  //structure to keep inbound inFrames
 
@@ -97,6 +89,44 @@ struct charger_status_report
   bool NMI = false; //New message indicator
   unsigned long last_update = 0;
 } charger_status;
+
+// DC-DC related parameters
+struct dcdc_status_report
+{
+  float DCDC_Voltage = 0; //DCDC output voltage (bytes 0/1)
+  float DCDC_Current = 0; //DCDC output current (bytes 2/3)
+  union
+  {
+    uint8_t byte4_value = 0;
+    struct{
+      uint8_t DCDC_ready : 1;      // 0: incomplete, 1: complete
+      uint8_t DCDC_status : 1;     // 0: stop, 1: work
+      uint8_t hard_fault : 1;      // 0: no error, 1: error
+      uint8_t error_CAN : 1;       // 0: no error, 1: error
+      uint8_t fan_ctrl : 1;        // 0: off, 1: on
+      uint8_t DCDC_stop_error : 1; // 0: no error, 1: error
+      uint8_t water_fan : 1;       // 0: fan off, 1: fan on
+      uint8_t HVIL_error : 1;      // 0: lock accomplish, 1: non lock
+    } work_status;
+  };
+  union
+  {
+    uint8_t byte5_value = 0;
+    struct{
+      uint8_t warm_temperature : 1; // 0: no warm, 1: warm
+      uint8_t over_temperature : 1; // 0: no error, 1: error
+      uint8_t over_voltage_in : 1;  // 0: no error, 1: error
+      uint8_t low_voltage_in : 1;   // 0: no error, 1: error
+      uint8_t over_voltage_out : 1; // 0: no error, 1: error
+      uint8_t low_voltage_out : 1;  // 0: no error, 1: error
+      uint8_t over_current_out : 1; // 0: no error, 1: error
+      uint8_t unused : 1;
+    } protection;
+  };
+  int temperature_C = -100;
+  unsigned long last_update = 0;
+} dcdc_status;
+
 
 typedef enum
 {
@@ -197,6 +227,16 @@ void handle_CAN()
       charger_status.last_update = millis(); //now
       serial_printf("Charger: %.2f V, %.2f A\n", charger_status.HV_Voltage, charger_status.HV_Current);
       charger_timer.reset();
+    }
+    else if (inFrame.id == 0x1801D08F)//DCDC status report
+    {
+      dcdc_status.DCDC_Voltage = (float)(inFrame.data.bytes[0] * 256 + inFrame.data.bytes[1]) * 0.1;
+      dcdc_status.DCDC_Current = (float)(inFrame.data.bytes[2] * 256 + inFrame.data.bytes[3]) * 0.1;
+      dcdc_status.byte4_value = inFrame.data.bytes[4];
+      dcdc_status.byte5_value = inFrame.data.bytes[5];
+      //byte [6] is unused
+      dcdc_status.temperature_C = (int)inFrame.data.bytes[7] - 60;
+      dcdc_status.last_update = millis(); //now
     }
     else
     {
@@ -422,13 +462,14 @@ void setup(void) {
 /////////////////// DISPLAY MONITOR HANDLING ////////////////////////
 typedef enum
 {
-  PAGE_HOME = 0,
+  PAGE_HOME_TEMP = 0,
+  PAGE_HOME_DCDC,
   PAGE_ERROR,
   PAGE_INFO,
   PAGE_CHARGER
 } display_page_t;
 // keeps track last page shown on display
-display_page_t lcd_page_index = PAGE_HOME;
+display_page_t lcd_page_index = PAGE_HOME_TEMP;
 
 void serial_printf(const char* format, ...)
 {
@@ -519,28 +560,38 @@ void update_display()
 {
   char line_buffer[30];
   static bool display_flag = 0;
-  display_flag = !display_flag;
+  static display_page_t which_home_page = PAGE_HOME_TEMP;
+  if (page_switch_timer.check())
+  {
+    switch (which_home_page)
+    {
+      case PAGE_HOME_TEMP:
+        //switch to DCDC only if there is a recent update
+        which_home_page = (millis() - dcdc_status.last_update < 2000) ? PAGE_HOME_DCDC : PAGE_HOME_TEMP;
+        page_switch_timer.interval(4500);
+        break;
+      case PAGE_HOME_DCDC:
+        which_home_page = PAGE_HOME_TEMP;
+        page_switch_timer.interval(1500);
+        break;
+    }
+    page_switch_timer.reset();
+  }
+    
   if (vehicle_status != CHARGER_PLUGGED)
   {
-    display_home_page();
-    // Status line
-    lcd.setCursor(0, 3);
-    lcd.print("STATUS: ");
-    if (!last_error_code)
-    {
-      lcd.print("OK          ");
-    }
+    if (which_home_page == PAGE_HOME_TEMP)
+      display_home_page_temperatures();
     else
-    {
-      sprintf(line_buffer, "ERROR(%d)", last_error_code);
-      lcd.print(line_buffer);
-    }
+      display_home_page_dcdc();
   }
   else 
   {
     display_charger_page();
   }
+  
   //blinking star
+  display_flag = !display_flag;
   lcd.setCursor(19, 0);
   lcd.print(display_flag ? "*": " ");
 }
@@ -583,13 +634,35 @@ void display_charger_page()
   lcd.print(line_buffer);
 }
 
-void display_home_page()
+void display_home_page_dcdc()
 {
-  if (lcd_page_index != PAGE_HOME)
+  if (lcd_page_index != PAGE_HOME_DCDC)
   {
     lcd.clear();
   }
-  lcd_page_index = PAGE_HOME;
+  lcd_page_index = PAGE_HOME_DCDC;
+  char line_buffer[30];
+  uint8_t row = 0, col = 0;
+  lcd.setCursor(0, 0);
+  lcd.print("DCDC:");
+  lcd.setCursor(0, 1);
+  sprintf(line_buffer, "Vout: %.2f Volts", dcdc_status.DCDC_Voltage);
+  lcd.print(line_buffer);
+  lcd.setCursor(0, 2);
+  sprintf(line_buffer, "Iout: %.2f Amps", dcdc_status.DCDC_Current);
+  lcd.print(line_buffer);
+  lcd.setCursor(0, 3);
+  sprintf(line_buffer, "Temp: %d C", dcdc_status.temperature_C);
+  lcd.print(line_buffer);  
+}
+
+void display_home_page_temperatures()
+{
+  if (lcd_page_index != PAGE_HOME_TEMP)
+  {
+    lcd.clear();
+  }
+  lcd_page_index = PAGE_HOME_TEMP;
   char line_buffer[30];
   // [0] Water Inlet  --> 0x13C05
   // [1] Bank1/2_High --> 0x13C7C
@@ -635,5 +708,18 @@ void display_home_page()
     }
     lcd.setCursor(col, row);
     lcd.print(line_buffer);
-  }  
+  }
+  
+  // Status line
+  lcd.setCursor(0, 3);
+  lcd.print("STATUS: ");
+  if (!last_error_code)
+  {
+    lcd.print("OK          ");
+  }
+  else
+  {
+    sprintf(line_buffer, "ERROR(%d)", last_error_code);
+    lcd.print(line_buffer);
+  }
 }
