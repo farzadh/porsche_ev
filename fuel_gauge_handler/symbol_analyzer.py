@@ -120,4 +120,4 @@ def analyze_kicad_symbols(project_dir):
 
 
 # Run
-analyze_kicad_symbols("./PWM_Converter")
+#analyze_kicad_symbols("./PWM_Converter")

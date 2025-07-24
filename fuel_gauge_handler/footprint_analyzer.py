@@ -126,4 +126,4 @@ def analyze(project_dir):
         print(f"{ref:8s}  {lib}:{name:<25s}  →  {source}")
 
 # Run
-analyze("./PWM_Converter")
+#analyze("./PWM_Converter")
