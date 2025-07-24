@@ -13,7 +13,6 @@ def load_fp_lib_table(path, project_dir=".", include_kicad_defaults=False):
     libs = {}
     # Load from file if available
     if path is not None:
-        print(f"File found: {path}")
         if path and os.path.exists(path):
             with open(path, 'r', encoding='utf-8') as f:
                 text = f.read()
@@ -21,7 +20,6 @@ def load_fp_lib_table(path, project_dir=".", include_kicad_defaults=False):
             #entries = re.findall(r'\(lib\s+\(name\s+"([^"]+)"\)\s+\(type\s+"([^"]+)"\)\s+\(uri\s+"([^"]+)"\)', text)
             entries = re.findall(r'\(lib\s*\(name\s*"([^"]+)"\)\s*\(type\s*"([^"]+)"\)\s*\(uri\s*"([^"]+)"\)', text)
 
-            print(f"Num entries: {entries}")
             for name, type_, uri in entries:
                 resolved_uri = resolve_kicad_path(uri, project_dir)
                 libs[name] = {"type": type_, "uri": resolved_uri}
@@ -84,8 +82,6 @@ def analyze(project_dir):
     project_libs = load_fp_lib_table(project_fp_table_path, project_dir=project_dir)
     global_libs = load_fp_lib_table(global_fp_table_path, include_kicad_defaults=True)
 
-    print ("Project libs = {}".format(project_libs))
-
     footprint_data = extract_footprints_with_refs(pcb_file)
 
     print("📦 Footprint Library Usage Report (with References)")
@@ -105,7 +101,6 @@ def analyze(project_dir):
             lib_uri = resolve_kicad_path(raw_uri, project_dir)
             lib_type = "Project-local"
             found_in = "project"
-            print(f"project_dir = {project_dir}, lib_uri = {lib_uri}")
             # Ensure it's truly inside the project folder
             proj_abs = os.path.realpath(project_dir)
             lib_abs = os.path.realpath(lib_uri)
